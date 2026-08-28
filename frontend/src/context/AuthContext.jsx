@@ -7,6 +7,8 @@ const AuthContext = createContext(null);
 const STORAGE_KEY = 'expense_tracker_user';
 const TOKEN_KEY = 'expense_tracker_token';
 
+
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
