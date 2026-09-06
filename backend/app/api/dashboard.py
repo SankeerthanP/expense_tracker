@@ -7,12 +7,25 @@ from app.models.user import User
 from app.schemas.dashboard import (
     CategoryExpenseItem,
     DashboardSummary,
+    ExpenseTrendsResponse,
     MonthlyExpenseItem,
     RecentExpenseItem,
 )
 from app.services import dashboard_service
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
+
+@router.get("/expense-trends", response_model=ExpenseTrendsResponse)
+def get_expense_trends(
+    period: str = Query(default="week", pattern="^(week|days|month)$"),
+    week_offset: int = Query(default=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return dashboard_service.get_expense_trends(
+        db, current_user.id, period=period, week_offset=week_offset
+    )
 
 
 @router.get("/summary", response_model=DashboardSummary)

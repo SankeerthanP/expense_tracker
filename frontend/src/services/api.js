@@ -1,6 +1,12 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const envUrl = import.meta.env.VITE_API_BASE_URL;
+const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const API_BASE_URL =
+  envUrl && !envUrl.includes('localhost')
+    ? envUrl
+    : `http://${hostname || 'localhost'}:8000`;
+
 const TOKEN_KEY = 'expense_tracker_token';
 
 const api = axios.create({

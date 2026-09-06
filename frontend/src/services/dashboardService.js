@@ -19,3 +19,11 @@ export async function getRecentExpenses(limit = 5) {
   const response = await api.get('/dashboard/recent-expenses', { params: { limit } });
   return response.data;
 }
+
+export async function getExpenseTrends(period = 'week', weekOffset = 0) {
+  const response = await api.get('/dashboard/expense-trends', {
+    params: { period, week_offset: weekOffset },
+  });
+  return response.data;
+}
+
