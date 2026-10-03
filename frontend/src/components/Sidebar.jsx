@@ -1,16 +1,16 @@
 import { useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/expenses/add', label: 'Add Expense' },
-  { to: '/expenses', label: 'Expense History' },
-  { to: '/profile', label: 'Profile' },
+  { to: '/dashboard', label: 'Dashboard', icon: '📊' },
+  { to: '/expenses/add', label: 'Add Expense', icon: '➕' },
+  { to: '/expenses', label: 'Expense History', icon: '📜' },
+  { to: '/profile', label: 'Profile', icon: '👤' },
 ];
 
 export default function Sidebar({ mobileOpen, onClose }) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     function handleKeyDown(e) {
@@ -30,6 +30,11 @@ export default function Sidebar({ mobileOpen, onClose }) {
     onClose();
   };
 
+  // Automatically close sidebar whenever ANY nav item / brand link / logout is clicked
+  const handleNavClick = () => {
+    onClose();
+  };
+
   return (
     <>
       <div
@@ -42,13 +47,19 @@ export default function Sidebar({ mobileOpen, onClose }) {
         style={!mobileOpen ? { transform: 'translateX(-100%)', visibility: 'hidden', pointerEvents: 'none' } : undefined}
       >
         <div className="sidebar-header">
-          <div className="sidebar-brand">
+          <Link
+            to="/dashboard"
+            className="sidebar-brand"
+            onClick={handleNavClick}
+            onTouchEnd={handleNavClick}
+            title="Go to Dashboard"
+          >
             <span className="brand-icon">₹</span>
             <div>
               <h2>Expense Tracker</h2>
               <p>Personal Finance</p>
             </div>
-          </div>
+          </Link>
           <button
             type="button"
             className="sidebar-close-btn"
@@ -67,22 +78,46 @@ export default function Sidebar({ mobileOpen, onClose }) {
               key={item.to}
               to={item.to}
               className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-              onClick={() => {
-                if (window.innerWidth <= 1024) {
-                  onClose();
-                }
-              }}
+              onClick={handleNavClick}
+              onTouchEnd={handleNavClick}
             >
-              {item.label}
+              <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
             </NavLink>
           ))}
         </nav>
 
-        <button type="button" className="logout-btn" onClick={logout}>
-          Logout
-        </button>
+        <div className="sidebar-footer">
+          {user && (
+            <Link
+              to="/profile"
+              className="sidebar-user-info"
+              onClick={handleNavClick}
+              onTouchEnd={handleNavClick}
+              title="View your profile"
+            >
+              <div className="sidebar-user-avatar">
+                {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <div className="sidebar-user-meta">
+                <span className="sidebar-user-name">{user.name}</span>
+                <span className="sidebar-user-email">{user.email}</span>
+              </div>
+            </Link>
+          )}
+
+          <button
+            type="button"
+            className="logout-btn"
+            onClick={() => {
+              handleNavClick();
+              logout();
+            }}
+          >
+            <span aria-hidden="true">🚪</span> Logout
+          </button>
+        </div>
       </aside>
     </>
   );
 }
-

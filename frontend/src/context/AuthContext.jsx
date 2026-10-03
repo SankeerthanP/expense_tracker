@@ -47,12 +47,14 @@ export function AuthProvider({ children }) {
     setUser(userData);
     setAuthToken(accessToken);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+    localStorage.setItem(TOKEN_KEY, accessToken);
   };
 
   const logout = () => {
     setUser(null);
     setAuthToken(null);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(TOKEN_KEY);
   };
 
   const value = useMemo(

@@ -47,3 +47,50 @@ export function formatTime(timeStr) {
 export function getErrorMessage(error, fallback = 'Something went wrong.') {
   return error?.response?.data?.detail || error?.message || fallback;
 }
+
+export const CATEGORY_ICONS = {
+  Food: '🍔',
+  Transport: '🚗',
+  Shopping: '🛍️',
+  Bills: '💡',
+  Entertainment: '🎬',
+  Health: '🏥',
+  Education: '📚',
+  Travel: '✈️',
+  Other: '📦',
+};
+
+export function getDaysRemainingInMonth() {
+  const now = new Date();
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return Math.max(1, lastDay - now.getDate() + 1);
+}
+
+export function exportExpensesToCSV(expenses, filename = 'expenses.csv') {
+  if (!expenses || !expenses.length) return false;
+
+  const headers = ['ID', 'Date', 'Time', 'Category', 'Reason', 'Amount (INR)'];
+  const rows = expenses.map((item) => [
+    item.id,
+    item.expense_date,
+    item.expense_time ? item.expense_time.slice(0, 5) : '',
+    `"${(item.category || '').replace(/"/g, '""')}"`,
+    `"${(item.reason || '').replace(/"/g, '""')}"`,
+    Number(item.amount || 0).toFixed(2),
+  ]);
+
+  const csvContent =
+    '\uFEFF' +
+    [headers.join(','), ...rows.map((row) => row.join(','))].join('\r\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  return true;
+}

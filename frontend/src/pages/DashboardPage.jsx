@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Area,
   AreaChart,
@@ -13,13 +14,21 @@ import {
 } from 'recharts';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import {
   getCategoryExpenses,
   getDashboardSummary,
   getExpenseTrends,
   getRecentExpenses,
 } from '../services/dashboardService';
-import { formatCurrency, formatDate, getErrorMessage } from '../utils/constants';
+import {
+  CATEGORY_ICONS,
+  formatCurrency,
+  formatDate,
+  getDaysRemainingInMonth,
+  getErrorMessage,
+} from '../utils/constants';
 
 const CHART_COLORS = [
   '#2563eb',
@@ -67,6 +76,9 @@ function CustomCategoryTooltip({ active, payload, totalSpent }) {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const { showToast } = useToast();
+
   const [summary, setSummary] = useState(null);
   const [trendData, setTrendData] = useState(null);
   const [trendPeriod, setTrendPeriod] = useState('week'); // 'week' | 'days' | 'month'
@@ -76,6 +88,15 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [trendLoading, setTrendLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Monthly Budget state (persisted per user in localStorage)
+  const budgetStorageKey = `expense_tracker_budget_${user?.id || 'default'}`;
+  const [monthlyBudget, setMonthlyBudget] = useState(() => {
+    const saved = localStorage.getItem(budgetStorageKey);
+    return saved ? Number(saved) : 25000;
+  });
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [budgetInputValue, setBudgetInputValue] = useState(monthlyBudget.toString());
 
   // Initial dashboard load
   useEffect(() => {
@@ -154,6 +175,18 @@ export default function DashboardPage() {
     fetchTrends('week', 0);
   };
 
+  const handleSaveBudget = (newVal) => {
+    const val = Number(newVal);
+    if (!val || val <= 0) {
+      showToast('Please enter a valid budget amount.', 'error');
+      return;
+    }
+    setMonthlyBudget(val);
+    localStorage.setItem(budgetStorageKey, val.toString());
+    setShowBudgetModal(false);
+    showToast(`Monthly budget set to ${formatCurrency(val)}`);
+  };
+
   if (loading) {
     return <LoadingState message="Loading dashboard..." />;
   }
@@ -163,27 +196,139 @@ export default function DashboardPage() {
   }
 
   const categoryTotalAmount = categoryData.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+  const spentThisMonth = Number(summary?.expenses_this_month || 0);
+  const budgetPercentage = monthlyBudget > 0 ? (spentThisMonth / monthlyBudget) * 100 : 0;
+  const remainingBudget = monthlyBudget - spentThisMonth;
+  const daysLeft = getDaysRemainingInMonth();
+  const dailySafeSpend = remainingBudget > 0 ? remainingBudget / daysLeft : 0;
+
+  // Budget status indicator
+  let budgetStatus = 'safe';
+  let budgetStatusLabel = 'On Track';
+  if (budgetPercentage >= 100) {
+    budgetStatus = 'exceeded';
+    budgetStatusLabel = 'Over Budget';
+  } else if (budgetPercentage >= 80) {
+    budgetStatus = 'warning';
+    budgetStatusLabel = 'Caution (80%+)';
+  }
+
+  // Top category insight
+  const topCategory = categoryData.length ? categoryData[0] : null;
 
   return (
     <div className="dashboard-page">
+      {/* Welcome & Quick Actions Bar */}
+      <section className="dashboard-welcome-banner">
+        <div className="welcome-text-group">
+          <h2>Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 👋</h2>
+          <p>
+            {topCategory
+              ? `You've spent the most on ${topCategory.category} (${((topCategory.total / Math.max(1, categoryTotalAmount)) * 100).toFixed(0)}% of total).`
+              : 'Keep track of your daily spending and stay within your budget goals.'}
+          </p>
+        </div>
+        <div className="welcome-actions">
+          <Link to="/expenses/add" className="primary-btn quick-action-btn">
+            <span>➕</span> Add Expense
+          </Link>
+          <Link to="/expenses" className="secondary-btn quick-action-btn">
+            <span>📜</span> View History
+          </Link>
+        </div>
+      </section>
+
       {/* Metric Summary Cards */}
       <section className="summary-grid">
         <article className="summary-card">
-          <p>Total Expenses</p>
+          <div className="summary-card-header">
+            <span className="summary-card-label">Total Expenses</span>
+            <span className="summary-card-icon">💳</span>
+          </div>
           <h3>{formatCurrency(summary?.total_expenses || 0)}</h3>
+          <span className="summary-card-sub">All-time tracked</span>
         </article>
+
         <article className="summary-card">
-          <p>This Month</p>
+          <div className="summary-card-header">
+            <span className="summary-card-label">This Month</span>
+            <span className="summary-card-icon">📅</span>
+          </div>
           <h3>{formatCurrency(summary?.expenses_this_month || 0)}</h3>
+          <span className="summary-card-sub">{daysLeft} days remaining</span>
         </article>
+
         <article className="summary-card">
-          <p>Today</p>
+          <div className="summary-card-header">
+            <span className="summary-card-label">Today</span>
+            <span className="summary-card-icon">⚡</span>
+          </div>
           <h3>{formatCurrency(summary?.expenses_today || 0)}</h3>
+          <span className="summary-card-sub">Spent today</span>
         </article>
+
         <article className="summary-card">
-          <p>Total Records</p>
+          <div className="summary-card-header">
+            <span className="summary-card-label">Transactions</span>
+            <span className="summary-card-icon">🧾</span>
+          </div>
           <h3>{summary?.total_count || 0}</h3>
+          <span className="summary-card-sub">Total records</span>
         </article>
+      </section>
+
+      {/* Monthly Budget Progress Card */}
+      <section className={`budget-meter-card ${budgetStatus}`}>
+        <div className="budget-header">
+          <div className="budget-title-area">
+            <span className="budget-icon">🎯</span>
+            <div>
+              <div className="budget-title-row">
+                <h4>Monthly Spending Budget</h4>
+                <span className={`budget-status-pill ${budgetStatus}`}>{budgetStatusLabel}</span>
+              </div>
+              <p className="budget-subtitle">
+                Target: <strong>{formatCurrency(monthlyBudget)}</strong> • Spent: <strong>{formatCurrency(spentThisMonth)}</strong> ({budgetPercentage.toFixed(1)}%)
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="edit-budget-btn"
+            onClick={() => {
+              setBudgetInputValue(monthlyBudget.toString());
+              setShowBudgetModal(true);
+            }}
+          >
+            ✏️ Edit Budget
+          </button>
+        </div>
+
+        {/* Progress Bar Meter */}
+        <div className="budget-progress-track">
+          <div
+            className={`budget-progress-fill ${budgetStatus}`}
+            style={{ width: `${Math.min(budgetPercentage, 100)}%` }}
+          />
+        </div>
+
+        {/* Budget Insight Chips */}
+        <div className="budget-metrics-grid">
+          <div className="budget-metric-item">
+            <span>Remaining Budget</span>
+            <strong className={remainingBudget < 0 ? 'text-danger' : 'text-success'}>
+              {remainingBudget >= 0 ? formatCurrency(remainingBudget) : `Exceeded by ${formatCurrency(Math.abs(remainingBudget))}`}
+            </strong>
+          </div>
+          <div className="budget-metric-item">
+            <span>Daily Safe Spend</span>
+            <strong>{formatCurrency(dailySafeSpend)} <small>/ day</small></strong>
+          </div>
+          <div className="budget-metric-item">
+            <span>Days Remaining</span>
+            <strong>{daysLeft} days in this month</strong>
+          </div>
+        </div>
       </section>
 
       {/* Charts Section */}
@@ -362,17 +507,19 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
               </div>
 
-              {/* Category Breakdown Table / Badges */}
+              {/* Category Breakdown Table / Badges with Category Icons */}
               <div className="category-breakdown-list">
                 {categoryData.map((entry, index) => {
                   const color = CHART_COLORS[index % CHART_COLORS.length];
                   const percent = categoryTotalAmount > 0
                     ? ((entry.total / categoryTotalAmount) * 100).toFixed(1)
                     : '0';
+                  const icon = CATEGORY_ICONS[entry.category] || '🏷️';
 
                   return (
                     <div key={entry.category} className="category-breakdown-row">
                       <div className="category-row-info">
+                        <span className="category-icon-emoji">{icon}</span>
                         <span className="category-color-dot" style={{ backgroundColor: color }} />
                         <span className="category-name-text">{entry.category}</span>
                         <span className="category-count-pill">{entry.count} {entry.count === 1 ? 'txn' : 'txns'}</span>
@@ -395,26 +542,34 @@ export default function DashboardPage() {
         </article>
       </section>
 
-      {/* Recent Expenses List */}
+      {/* Recent Expenses List with Category Icons & Link to History */}
       <section className="chart-card">
         <div className="chart-header-row">
           <div>
             <h3>Recent Expenses</h3>
             <p className="chart-subtitle">Your latest recorded transactions</p>
           </div>
+          <Link to="/expenses" className="text-btn view-all-link">
+            View All History →
+          </Link>
         </div>
         {recentExpenses.length ? (
           <div className="recent-list">
-            {recentExpenses.map((expense) => (
-              <div key={expense.id} className="recent-item">
-                <div className="recent-item-meta">
-                  <span className="category-badge">{expense.category}</span>
-                  <strong>{expense.reason}</strong>
-                  <span>{formatDate(expense.expense_date)}</span>
+            {recentExpenses.map((expense) => {
+              const icon = CATEGORY_ICONS[expense.category] || '🏷️';
+              return (
+                <div key={expense.id} className="recent-item">
+                  <div className="recent-item-meta">
+                    <span className="category-badge">
+                      <span className="badge-emoji">{icon}</span> {expense.category}
+                    </span>
+                    <strong>{expense.reason}</strong>
+                    <span>{formatDate(expense.expense_date)}</span>
+                  </div>
+                  <strong className="recent-item-amount">{formatCurrency(expense.amount)}</strong>
                 </div>
-                <strong className="recent-item-amount">{formatCurrency(expense.amount)}</strong>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <EmptyState
@@ -423,6 +578,72 @@ export default function DashboardPage() {
           />
         )}
       </section>
+
+      {/* Edit Budget Modal */}
+      {showBudgetModal && (
+        <div className="modal-overlay" onClick={() => setShowBudgetModal(false)}>
+          <div className="modal-card budget-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Set Monthly Budget</h3>
+              <button
+                type="button"
+                className="icon-btn close-modal-btn"
+                onClick={() => setShowBudgetModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <p className="modal-description">
+              Set your target spending limit for the month. We will help you track remaining funds and daily safe spending.
+            </p>
+
+            {/* Quick Preset Buttons */}
+            <div className="budget-preset-buttons">
+              {[10000, 20000, 30000, 50000, 75000, 100000].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  className={`budget-preset-chip ${Number(budgetInputValue) === preset ? 'active' : ''}`}
+                  onClick={() => setBudgetInputValue(preset.toString())}
+                >
+                  {formatCurrency(preset).replace('.00', '')}
+                </button>
+              ))}
+            </div>
+
+            <div className="modal-form-group">
+              <label htmlFor="budget-input">Custom Budget (₹)</label>
+              <input
+                id="budget-input"
+                type="number"
+                min="100"
+                step="500"
+                value={budgetInputValue}
+                onChange={(e) => setBudgetInputValue(e.target.value)}
+                placeholder="e.g. 25000"
+                autoFocus
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => setShowBudgetModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => handleSaveBudget(budgetInputValue)}
+              >
+                Save Budget
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
